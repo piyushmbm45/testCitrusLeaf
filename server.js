@@ -6,6 +6,7 @@ const bcrypt = require('bcrypt');
 const cookieParser = require('cookie-parser');
 const { createTokens, validateToken } = require('./JWT');
 const fs = require('fs');
+const { parse } = require('csv-parse');
 
 const { APP_PORT, DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE, DB_PORT } =
   process.env;
@@ -27,28 +28,6 @@ const db = mysql.createPool({
 db.getConnection((err, connection) => {
   if (err) throw err;
   console.log('DB connected successful: ' + connection.threadId);
-});
-
-app.post('/file', (req, res) => {
-  const form = formidable({ multiples: true });
-  form.maxFileSize = 50 * 1024 * 1024; // 5MB
-  form.parse(req, async (err, fields, files) => {
-    console.log('🚀 ~ file: server.js ~ line 33 ~ form.parse ~ fields', fields);
-    console.log(
-      '🚀 ~ file: server.js ~ line 33 ~ form.parse ~ files',
-      files.attachment
-    );
-
-    if (err) {
-      console.log('Error parsing the files');
-      return res.status(400).json({
-        status: 'Fail',
-        message: 'There was an error parsing the files',
-        error: err,
-      });
-    }
-  });
-  res.send('hello');
 });
 
 app.post('/register', async (req, res) => {
@@ -263,6 +242,45 @@ app.post('/api/delete', validateToken, async (req, res) => {
         connection.release();
       });
     });
+  });
+});
+
+app.post('/api/file/upload', validateToken, async (req, res) => {
+  const id = req.user_id;
+  const form = formidable({ multiples: true });
+  form.maxFileSize = 50 * 1024 * 1024; // 5MB
+  form.parse(req, async (err, fields, files) => {
+    if (err) {
+      console.log('Error parsing the files');
+      return res.status(400).json({
+        status: 'Fail',
+        message: 'There was an error parsing the files',
+        error: err,
+      });
+    }
+    fs.createReadStream(files.attachment.filepath)
+      .pipe(parse({ delimiter: ',', from_line: 2 }))
+      .on('data', function (row) {
+        db.getConnection(async (err, connection) => {
+          if (err) throw err;
+          const sqlInsert =
+            'INSERT INTO tasks (title,due_date,user_id,attachment) VALUES (?,?,?,?)';
+          const insert_query = mysql.format(sqlInsert, [
+            row[1],
+            row[2],
+            id,
+            null,
+          ]);
+          connection.query(insert_query, (err, result) => {
+            if (err) throw err;
+            console.log(result);
+          });
+        });
+      })
+      .on('end', () => {
+        console.log('>>>>> done');
+        res.json({ data: 'data inserted' });
+      });
   });
 });
 
