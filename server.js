@@ -5,6 +5,7 @@ const formidable = require('formidable');
 const bcrypt = require('bcrypt');
 const cookieParser = require('cookie-parser');
 const { createTokens, validateToken } = require('./JWT');
+const fs = require('fs');
 
 const { APP_PORT, DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE, DB_PORT } =
   process.env;
@@ -127,6 +128,51 @@ app.post('/login', (req, res) => {
             .json({ error: 'Wrong Username and Password Combination!' });
         }
       }
+    });
+  });
+});
+
+app.get('/profile', validateToken, (req, res) => {
+  console.log(req.user_id);
+  res.json('profile');
+});
+
+app.post('/api/create', validateToken, async (req, res) => {
+  const id = req.user_id;
+  const form = formidable({ multiples: true });
+  form.maxFileSize = 50 * 1024 * 1024; // 5MB
+  form.parse(req, async (err, fields, files) => {
+    if (err) {
+      console.log('Error parsing the files');
+      return res.status(400).json({
+        status: 'Fail',
+        message: 'There was an error parsing the files',
+        error: err,
+      });
+    }
+    fs.open(files.attachment.filepath, 'r', function (err, fd) {
+      if (err) throw err;
+
+      var buffer = new Buffer.alloc(files.attachment.size);
+      fs.read(fd, buffer, 0, 100, 0, function (err, num) {
+        if (err) throw err;
+        db.getConnection(async (err, connection) => {
+          if (err) throw err;
+          const sqlInsert =
+            'INSERT INTO tasks (title,due_date,user_id,attachment) VALUES (?,?,?,?)';
+          const insert_query = mysql.format(sqlInsert, [
+            fields.title,
+            fields.due_date,
+            id,
+            buffer,
+          ]);
+          connection.query(insert_query, (err, result) => {
+            if (err) throw err;
+            res.json({ data: 'task created' });
+            connection.release();
+          });
+        });
+      });
     });
   });
 });

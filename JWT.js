@@ -17,7 +17,12 @@ const validateToken = (req, res, next) => {
   try {
     const validToken = verify(accessToken, JWT_SECRET);
     if (validToken) {
+      console.log(
+        '🚀 ~ file: JWT.js ~ line 20 ~ validateToken ~ validToken',
+        validToken
+      );
       req.authenticated = true;
+      req.user_id = validToken.id;
       return next();
     }
   } catch (err) {
