@@ -192,4 +192,49 @@ app.get('/api/list', validateToken, async (req, res) => {
   });
 });
 
+app.post('/api/edit', validateToken, async (req, res) => {
+  const id = req.user_id;
+  const form = formidable({ multiples: true });
+  form.maxFileSize = 50 * 1024 * 1024; // 5MB
+  form.parse(req, async (err, fields, files) => {
+    if (err) {
+      console.log('Error parsing the files');
+      return res.status(400).json({
+        status: 'Fail',
+        message: 'There was an error parsing the files',
+        error: err,
+      });
+    }
+    // todo check that what fields are available
+    fs.open(files.attachment.filepath, 'r', function (err, fd) {
+      if (err) throw err.message;
+
+      var buffer = new Buffer.alloc(files.attachment.size);
+      fs.read(fd, buffer, 0, 100, 0, function (err, num) {
+        if (err) throw err;
+        db.getConnection(async (err, connection) => {
+          if (err) throw err;
+          const sqlInsert =
+            'UPDATE tasks SET title = ?, due_date = ?, attachment = ? WHERE id = ?';
+          const insert_query = mysql.format(sqlInsert, [
+            fields.title,
+            fields.due_date,
+            buffer,
+            fields.id,
+          ]);
+          connection.query(insert_query, (err, result) => {
+            if (err) throw err;
+            console.log(
+              '🚀 ~ file: server.js ~ line 225 ~ connection.query ~ result',
+              result
+            );
+            res.json({ data: 'task updated' });
+            connection.release();
+          });
+        });
+      });
+    });
+  });
+});
+
 app.listen(APP_PORT, () => console.log(`Server is Listening on ${APP_PORT}`));
