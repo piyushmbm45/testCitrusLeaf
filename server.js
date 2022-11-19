@@ -193,7 +193,6 @@ app.get('/api/list', validateToken, async (req, res) => {
 });
 
 app.post('/api/edit', validateToken, async (req, res) => {
-  const id = req.user_id;
   const form = formidable({ multiples: true });
   form.maxFileSize = 50 * 1024 * 1024; // 5MB
   form.parse(req, async (err, fields, files) => {
@@ -232,6 +231,36 @@ app.post('/api/edit', validateToken, async (req, res) => {
             connection.release();
           });
         });
+      });
+    });
+  });
+});
+
+app.post('/api/delete', validateToken, async (req, res) => {
+  const form = formidable({ multiples: true });
+  form.parse(req, async (err, fields, files) => {
+    if (err) {
+      console.log('Error parsing the files');
+      return res.status(400).json({
+        status: 'Fail',
+        message: 'There was an error parsing the files',
+        error: err,
+      });
+    }
+
+    db.getConnection(async (err, connection) => {
+      if (err) throw err;
+      const sqlInsert = 'DELETE FROM tasks WHERE id = ?';
+      const insert_query = mysql.format(sqlInsert, [fields.id]);
+      connection.query(insert_query, (err, result) => {
+        if (err) throw err;
+        console.log(
+          '🚀 ~ file: server.js ~ line 225 ~ connection.query ~ result',
+          result
+        );
+        // todo check rows affected
+        res.json({ data: 'task deleted' });
+        connection.release();
       });
     });
   });
