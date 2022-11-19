@@ -177,4 +177,19 @@ app.post('/api/create', validateToken, async (req, res) => {
   });
 });
 
+app.get('/api/list', validateToken, async (req, res) => {
+  const id = req.user_id;
+
+  db.getConnection(async (err, connection) => {
+    if (err) throw err;
+    const sqlInsert = 'SELECT * FROM tasks WHERE user_id = ?';
+    const insert_query = mysql.format(sqlInsert, [id]);
+    connection.query(insert_query, (err, result) => {
+      if (err) throw err;
+      res.json(result);
+      connection.release();
+    });
+  });
+});
+
 app.listen(APP_PORT, () => console.log(`Server is Listening on ${APP_PORT}`));
