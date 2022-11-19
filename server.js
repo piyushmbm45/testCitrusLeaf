@@ -19,16 +19,9 @@ const db = mysql.createPool({
   user: DB_USER,
   database: DB_DATABASE,
   connectionLimit: 100,
-  password: DB_PASSWORD, // password for the new user
+  password: DB_PASSWORD,
   port: DB_PORT,
 });
-
-// db.connect((err) => {
-//   if (err) {
-//     console.log('error in db connection');
-//   }
-//   console.log('DB connected Successfully');
-// });
 
 db.getConnection((err, connection) => {
   if (err) throw err;
@@ -65,7 +58,8 @@ app.post('/register', async (req, res) => {
       if (err) throw err;
       const sqlSearch = 'SELECT * FROM users WHERE email = ?';
       const search_query = mysql.format(sqlSearch, [email]);
-      const sqlInsert = 'INSERT INTO users VALUES (?,?,?)';
+      const sqlInsert =
+        'INSERT INTO users (name,email,password) VALUES (?,?,?)';
       const insert_query = mysql.format(sqlInsert, [
         name,
         email,
@@ -74,18 +68,12 @@ app.post('/register', async (req, res) => {
       connection.query(search_query, async (err, result) => {
         if (err) throw err;
         if (result.length != 0) {
-          console.log('------> User already exists');
           res.status(400).send('User already exists');
           connection.release();
         } else {
           connection.query(insert_query, (err, result) => {
-            if (err) {
-              return res.status(400).send('error in inserting data');
-            }
-            console.log('--------> Created new User');
-            console.log(result.insertId);
-            const message = 'user is registered';
-            res.send(message);
+            if (err) throw err;
+            res.json({ data: 'user is registered' });
             connection.release();
           });
         }
@@ -94,6 +82,53 @@ app.post('/register', async (req, res) => {
   } else {
     res.status(400).send('All fields are required');
   }
+});
+
+app.post('/login', (req, res) => {
+  const { password, email } = req.body;
+  db.getConnection(async (err, connection) => {
+    if (err) throw err;
+    const sqlSearch = 'Select * from users where email = ?';
+    const search_query = mysql.format(sqlSearch, [email]);
+    connection.query(search_query, async (err, result) => {
+      console.log(
+        '🚀 ~ file: server.js ~ line 125 ~ connection.query ~ result',
+        result
+      );
+      connection.release();
+
+      if (err) throw err;
+      if (result.length == 0) {
+        console.log('--------> User does not exist');
+        res.status(404).send('User does not exist');
+      } else {
+        const hashedPassword = result[0].password;
+        console.log(
+          '🚀 ~ file: server.js ~ line 132 ~ connection.query ~ result',
+          result[0].password
+        );
+
+        //get the hashedPassword from result
+        if (await bcrypt.compare(password, hashedPassword)) {
+          console.log('---------> Login Successful');
+          const accessToken = createTokens({
+            email: result[0].email,
+            id: result[0].id,
+          });
+
+          res.cookie('access-token', accessToken, {
+            maxAge: 60 * 60 * 24 * 30 * 1000, // 30day
+            httpOnly: true,
+          });
+          res.json('LOGGED IN');
+        } else {
+          res
+            .status(400)
+            .json({ error: 'Wrong Username and Password Combination!' });
+        }
+      }
+    });
+  });
 });
 
 app.listen(APP_PORT, () => console.log(`Server is Listening on ${APP_PORT}`));
